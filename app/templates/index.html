@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Gestión de Tickets de Soporte</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      background: #F4F6FA;
+      color: #1F2937;
+    }
+    header {
+      background: #1F3864;
+      color: #fff;
+      padding: 24px 32px;
+    }
+    header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+    header p { margin: 4px 0 0; font-size: 13px; opacity: 0.85; }
+    main {
+      max-width: 980px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h2 { margin: 0 0 16px; font-size: 16px; color: #1F3864; }
+    form { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+    form .full { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; color: #4B5563; margin-bottom: 4px; }
+    input, textarea, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    textarea { min-height: 60px; resize: vertical; }
+    button {
+      background: #1F3864;
+      color: #fff;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    button:hover { background: #2E4E80; }
+    button.secondary { background: #E5E7EB; color: #1F2937; }
+    button.secondary:hover { background: #D1D5DB; }
+    button.danger { background: #DC2626; }
+    button.danger:hover { background: #B91C1C; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #E5E7EB; }
+    th { background: #F9FAFB; font-weight: 600; font-size: 12px; text-transform: uppercase; color: #6B7280; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .pri-baja { background: #DBEAFE; color: #1E40AF; }
+    .pri-media { background: #FEF3C7; color: #92400E; }
+    .pri-alta { background: #FEE2E2; color: #991B1B; }
+    .sta-abierto { background: #DCFCE7; color: #166534; }
+    .sta-en_progreso { background: #DBEAFE; color: #1E40AF; }
+    .sta-cerrado { background: #E5E7EB; color: #374151; }
+    .actions { display: flex; gap: 6px; }
+    .empty { padding: 24px; text-align: center; color: #6B7280; font-style: italic; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sistema de Gestión de Tickets de Soporte</h1>
+    <p>Énfasis Profesional I (Integración Continua) — Politécnico Grancolombiano</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Nuevo ticket</h2>
+      <form id="ticketForm">
+        <div class="full">
+          <label for="title">Título *</label>
+          <input id="title" type="text" required maxlength="120" placeholder="Ej: Servidor de correo no responde">
+        </div>
+        <div class="full">
+          <label for="description">Descripción</label>
+          <textarea id="description" maxlength="500" placeholder="Detalles del incidente reportado"></textarea>
+        </div>
+        <div>
+          <label for="priority">Prioridad</label>
+          <select id="priority">
+            <option value="baja">Baja</option>
+            <option value="media" selected>Media</option>
+            <option value="alta">Alta</option>
+          </select>
+        </div>
+        <div style="align-self: end;">
+          <button type="submit">Crear ticket</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Tickets registrados</h2>
+      <div id="tableWrap">
+        <div class="empty">Cargando...</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API = "/api/tickets";
+
+    async function loadTickets() {
+      const wrap = document.getElementById("tableWrap");
+      try {
+        const res = await fetch(API);
+        const data = await res.json();
+        if (data.length === 0) {
+          wrap.innerHTML = '<div class="empty">No hay tickets registrados todavía.</div>';
+          return;
+        }
+        wrap.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>Título</th><th>Prioridad</th><th>Estado</th><th>Creado</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(t => `
+                <tr>
+                  <td>#${t.id}</td>
+                  <td>${escapeHtml(t.title)}</td>
+                  <td><span class="badge pri-${t.priority}">${t.priority}</span></td>
+                  <td><span class="badge sta-${t.status}">${t.status.replace("_", " ")}</span></td>
+                  <td>${new Date(t.created_at).toLocaleString("es-CO")}</td>
+                  <td class="actions">
+                    ${nextActionButton(t)}
+                    <button class="danger" onclick="deleteTicket(${t.id})">Eliminar</button>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        wrap.innerHTML = `<div class="empty">Error al cargar: ${err.message}</div>`;
+      }
+    }
+
+    function nextActionButton(t) {
+      if (t.status === "abierto") {
+        return `<button class="secondary" onclick="updateStatus(${t.id}, 'en_progreso')">Iniciar</button>`;
+      }
+      if (t.status === "en_progreso") {
+        return `<button class="secondary" onclick="updateStatus(${t.id}, 'cerrado')">Cerrar</button>`;
+      }
+      return `<button class="secondary" onclick="updateStatus(${t.id}, 'abierto')">Reabrir</button>`;
+    }
+
+    async function updateStatus(id, status) {
+      await fetch(`${API}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      loadTickets();
+    }
+
+    async function deleteTicket(id) {
+      if (!confirm(`¿Eliminar el ticket #${id}?`)) return;
+      await fetch(`${API}/${id}`, { method: "DELETE" });
+      loadTickets();
+    }
+
+    document.getElementById("ticketForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = {
+        title: document.getElementById("title").value,
+        description: document.getElementById("description").value,
+        priority: document.getElementById("priority").value
+      };
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        e.target.reset();
+        document.getElementById("priority").value = "media";
+        loadTickets();
+      } else {
+        const err = await res.json();
+        alert("Error: " + err.error);
+      }
+    });
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    loadTickets();
+  </script>
+</body>
+</html>
