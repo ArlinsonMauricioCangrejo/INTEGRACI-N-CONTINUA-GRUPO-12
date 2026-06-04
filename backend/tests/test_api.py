@@ -1,21 +1,32 @@
 """
 Pruebas automatizadas del Sistema de Gestión de Tickets.
 
-Estas pruebas se ejecutarán automáticamente por Jenkins en la Semana 5
-sobre cada cambio publicado en GitHub, garantizando que el contrato de
-la API se mantenga estable a lo largo del módulo.
-"""
-import pytest
+Las pruebas usan SQLite en archivo local (`test.db`) para no requerir
+PostgreSQL en el entorno de pruebas, manteniendo el mismo modelo
+SQLAlchemy y la misma capa de almacenamiento que se usa en producción.
 
-from app.main import app, storage
+Jenkins ejecutará automáticamente estas pruebas sobre cada cambio
+publicado en GitHub a partir de la Entrega 2 (Semana 5).
+"""
+import os
+
+# Forzar SQLite ANTES de importar la app, para que database.py use el motor correcto.
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+
+import pytest  # noqa: E402
+
+from app.database import drop_db, init_db  # noqa: E402
+from app.main import app, storage  # noqa: E402
 
 
 @pytest.fixture
 def client():
-    storage.clear()
+    drop_db()
+    init_db()
     app.config["TESTING"] = True
     with app.test_client() as c:
         yield c
+    drop_db()
 
 
 def test_health_endpoint(client):
@@ -23,7 +34,7 @@ def test_health_endpoint(client):
     assert res.status_code == 200
     data = res.get_json()
     assert data["status"] == "ok"
-    assert data["service"] == "ticket-system"
+    assert data["service"] == "ticket-system-backend"
 
 
 def test_create_ticket_basic(client):
@@ -101,7 +112,11 @@ def test_delete_nonexistent_ticket_returns_404(client):
     assert res.status_code == 404
 
 
-def test_index_page_renders(client):
-    res = client.get("/")
-    assert res.status_code == 200
-    assert b"Sistema de Gesti" in res.data
+def test_ticket_persists_in_database(client):
+    """Verifica que el ticket pasa efectivamente por la base de datos y no se queda en memoria."""
+    client.post("/api/tickets", json={"title": "Persistente", "priority": "alta"})
+    # Recupera directamente desde el storage (que consulta la DB)
+    tickets = storage.all()
+    assert len(tickets) == 1
+    assert tickets[0]["title"] == "Persistente"
+    assert tickets[0]["priority"] == "alta"

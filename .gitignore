@@ -1,10 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
-# Distribution / packaging
 .Python
 build/
 dist/
@@ -23,6 +21,11 @@ ENV/
 htmlcov/
 .tox/
 
+# SQLite (desarrollo local)
+*.db
+*.sqlite
+*.sqlite3
+
 # IDEs
 .idea/
 .vscode/
@@ -33,6 +36,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Local env files
+# Variables de entorno locales
 .env
 .env.local
+
+# Docker
+*.log

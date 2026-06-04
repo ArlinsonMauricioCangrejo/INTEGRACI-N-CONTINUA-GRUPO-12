@@ -1,13 +1,17 @@
 """
 Modelo del dominio: Ticket de soporte.
 
-En la Semana 3 esta clase se reemplaza por un modelo SQLAlchemy mapeado
-contra PostgreSQL. Por ahora usa dataclasses para mantener simple la base
-y permitir que el equipo se concentre en la arquitectura del proyecto y
-en la integración continua.
+Se mapea a la tabla `tickets` de PostgreSQL mediante SQLAlchemy ORM.
+Mantiene las mismas validaciones de prioridad y estado que la versión
+anterior en memoria, de modo que las pruebas y los consumidores del
+modelo no cambian su contrato.
 """
-from dataclasses import dataclass
 from datetime import datetime, timezone
+
+from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy.orm import Mapped
+
+from app.database import Base
 
 VALID_PRIORITIES = {"baja", "media", "alta"}
 VALID_STATUSES = {"abierto", "en_progreso", "cerrado"}
@@ -25,15 +29,20 @@ class Status:
     CERRADO = "cerrado"
 
 
-@dataclass
-class Ticket:
-    id: int
-    title: str
-    description: str
-    priority: str
-    status: str
-    created_at: str
-    updated_at: str
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class Ticket(Base):
+    __tablename__ = "tickets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(120), nullable=False)
+    description = Column(String(500), default="")
+    priority = Column(String(20), default=Priority.MEDIA, nullable=False)
+    status = Column(String(20), default=Status.ABIERTO, nullable=False)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
 
     @classmethod
     def new(cls, title: str, description: str = "", priority: str = "media") -> "Ticket":
@@ -42,18 +51,14 @@ class Ticket:
             raise ValueError(
                 f"Prioridad inválida '{priority}'. Use: {', '.join(sorted(VALID_PRIORITIES))}"
             )
-        now = datetime.now(timezone.utc).isoformat()
         return cls(
-            id=0,  # asignado por el almacenamiento
             title=title.strip(),
             description=(description or "").strip(),
             priority=priority,
             status=Status.ABIERTO,
-            created_at=now,
-            updated_at=now,
         )
 
-    def update(self, status=None, priority=None, description=None, title=None):
+    def apply_update(self, status=None, priority=None, description=None, title=None) -> None:
         if status is not None:
             status = status.lower()
             if status not in VALID_STATUSES:
@@ -72,15 +77,14 @@ class Ticket:
             self.description = description.strip()
         if title is not None and title.strip():
             self.title = title.strip()
-        self.updated_at = datetime.now(timezone.utc).isoformat()
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "title": self.title,
-            "description": self.description,
+            "description": self.description or "",
             "priority": self.priority,
             "status": self.status,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() + "Z" if self.updated_at else None,
         }

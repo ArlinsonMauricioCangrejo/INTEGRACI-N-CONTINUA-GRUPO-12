@@ -1,0 +1,89 @@
+# =============================================================================
+# Sistema de Gestión de Tickets de Soporte
+# Énfasis Profesional I (Integración Continua) — Politécnico Grancolombiano
+# =============================================================================
+# Este archivo orquesta los tres contenedores que componen la solución:
+#   - db        : PostgreSQL 16 (motor de persistencia)
+#   - backend   : API REST en Python con Flask
+#   - frontend  : Interfaz web servida por Nginx con proxy reverso
+#
+# Los tres contenedores se comunican a través de una red interna (ticket-net)
+# definida más abajo. La comunicación entre ellos es resuelta por DNS
+# interno de Docker usando el nombre del servicio como hostname.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Contenedor 1: Base de Datos PostgreSQL
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: ticket-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ticket_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ticket_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-tickets_db}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ticket_user} -d ${POSTGRES_DB:-tickets_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ticket-net
+
+  # ---------------------------------------------------------------------------
+  # Contenedor 2: Backend (API REST en Flask)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ticket-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ticket_user}:${POSTGRES_PASSWORD:-ticket_pass}@db:5432/${POSTGRES_DB:-tickets_db}
+      FLASK_ENV: production
+      PORT: "5000"
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ticket-net
+
+  # ---------------------------------------------------------------------------
+  # Contenedor 3: Frontend (Nginx con proxy reverso hacia el backend)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ticket-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - ticket-net
+
+# =============================================================================
+# Red interna que conecta los tres contenedores
+# =============================================================================
+networks:
+  ticket-net:
+    driver: bridge
+    name: ticket-net
+
+# =============================================================================
+# Volumen persistente para los datos de PostgreSQL
+# (los tickets sobreviven a reinicios del contenedor)
+# =============================================================================
+volumes:
+  db_data:
+    name: ticket-db-data

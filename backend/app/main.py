@@ -1,44 +1,43 @@
 """
-Sistema de Gestión de Tickets de Soporte.
+Sistema de Gestión de Tickets de Soporte — Contenedor Backend.
 
-Aplicación Flask que expone una API REST y una interfaz web mínima para
-crear, listar, actualizar y eliminar tickets. Este es el punto de entrada
-único del contenedor Backend; el contenedor Frontend de la Semana 3 podrá
-seguir consumiendo esta misma API.
-
-Endpoints expuestos:
-    GET    /                      Interfaz web
-    GET    /api/health            Verificación de salud del servicio
-    GET    /api/tickets           Listar tickets
-    POST   /api/tickets           Crear ticket
-    GET    /api/tickets/<id>      Consultar ticket
-    PUT    /api/tickets/<id>      Actualizar ticket
-    DELETE /api/tickets/<id>      Eliminar ticket
+API REST en Flask que expone los endpoints de gestión de tickets.
+A partir de la Entrega 1 (Semana 3) el backend deja de servir la
+interfaz web: la interfaz queda alojada en su propio contenedor
+(Frontend) y consume esta API a través del proxy reverso de Nginx,
+materializando la separación de responsabilidades exigida por la
+arquitectura de contenedores.
 """
-from flask import Flask, jsonify, render_template, request
+import os
 
+from flask import Flask, jsonify, request
+
+from app.database import init_db
 from app.models import Ticket
 from app.storage import TicketStorage
 
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 
 app = Flask(__name__)
 storage = TicketStorage()
 
-
-@app.route("/")
-def index():
-    return render_template("index.html")
+# Crea las tablas en PostgreSQL la primera vez que el contenedor arranca.
+init_db()
 
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "ticket-system", "version": VERSION})
+    return jsonify({
+        "status": "ok",
+        "service": "ticket-system-backend",
+        "version": VERSION,
+        "database": os.environ.get("DATABASE_URL", "sqlite (local)").split("@")[-1],
+    })
 
 
 @app.route("/api/tickets", methods=["GET"])
 def list_tickets():
-    return jsonify([t.to_dict() for t in storage.all()])
+    return jsonify(storage.all())
 
 
 @app.route("/api/tickets", methods=["POST"])
@@ -55,8 +54,7 @@ def create_ticket():
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    storage.add(ticket)
-    return jsonify(ticket.to_dict()), 201
+    return jsonify(storage.add(ticket)), 201
 
 
 @app.route("/api/tickets/<int:ticket_id>", methods=["GET"])
@@ -64,17 +62,15 @@ def get_ticket(ticket_id: int):
     ticket = storage.get(ticket_id)
     if ticket is None:
         return jsonify({"error": "Ticket no encontrado"}), 404
-    return jsonify(ticket.to_dict())
+    return jsonify(ticket)
 
 
 @app.route("/api/tickets/<int:ticket_id>", methods=["PUT"])
 def update_ticket(ticket_id: int):
-    ticket = storage.get(ticket_id)
-    if ticket is None:
-        return jsonify({"error": "Ticket no encontrado"}), 404
     data = request.get_json(silent=True) or {}
     try:
-        ticket.update(
+        updated = storage.update(
+            ticket_id,
             status=data.get("status"),
             priority=data.get("priority"),
             description=data.get("description"),
@@ -82,7 +78,9 @@ def update_ticket(ticket_id: int):
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    return jsonify(ticket.to_dict())
+    if updated is None:
+        return jsonify({"error": "Ticket no encontrado"}), 404
+    return jsonify(updated)
 
 
 @app.route("/api/tickets/<int:ticket_id>", methods=["DELETE"])
@@ -93,4 +91,6 @@ def delete_ticket(ticket_id: int):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_ENV", "production") == "development"
+    app.run(host="0.0.0.0", port=port, debug=debug)
