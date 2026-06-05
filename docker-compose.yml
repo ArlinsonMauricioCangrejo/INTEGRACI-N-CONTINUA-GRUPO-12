@@ -1,15 +1,18 @@
 # =============================================================================
-# Sistema de Gestión de Tickets de Soporte
-# Énfasis Profesional I (Integración Continua) — Politécnico Grancolombiano
+# Sistema de Gestion de Tickets de Soporte
+# Enfasis Profesional I (Integracion Continua) - Politecnico Grancolombiano
 # =============================================================================
-# Este archivo orquesta los tres contenedores que componen la solución:
+# Este archivo orquesta los cuatro contenedores que componen la solucion:
+#
 #   - db        : PostgreSQL 16 (motor de persistencia)
 #   - backend   : API REST en Python con Flask
 #   - frontend  : Interfaz web servida por Nginx con proxy reverso
+#   - jenkins   : Gestor de operaciones CI/CD (Entrega 2)
 #
-# Los tres contenedores se comunican a través de una red interna (ticket-net)
-# definida más abajo. La comunicación entre ellos es resuelta por DNS
-# interno de Docker usando el nombre del servicio como hostname.
+# Los contenedores se comunican a traves de una red interna (ticket-net).
+# La comunicacion entre ellos se resuelve por DNS interno de Docker usando
+# el nombre del servicio como hostname.
+# =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
@@ -72,8 +75,32 @@ services:
     networks:
       - ticket-net
 
+  # ---------------------------------------------------------------------------
+  # Contenedor 4: Jenkins (Gestor de operaciones CI/CD - Entrega 2)
+  # ---------------------------------------------------------------------------
+  # Jenkins se ejecuta dentro de un contenedor para mantener la coherencia
+  # operativa con el resto del stack. Tiene acceso al socket de Docker del
+  # host para poder construir imagenes y orquestar los demas contenedores
+  # como parte del pipeline.
+  # ---------------------------------------------------------------------------
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: ticket-jenkins
+    restart: unless-stopped
+    user: root  # Necesario para acceder al socket de Docker
+    ports:
+      - "8081:8080"    # UI de Jenkins (8080 ya esta usado por el frontend)
+      - "50000:50000"  # Conexiones de agentes Jenkins
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=true"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock  # Permite a Jenkins usar Docker del host
+    networks:
+      - ticket-net
+
 # =============================================================================
-# Red interna que conecta los tres contenedores
+# Red interna que conecta los cuatro contenedores
 # =============================================================================
 networks:
   ticket-net:
@@ -81,9 +108,10 @@ networks:
     name: ticket-net
 
 # =============================================================================
-# Volumen persistente para los datos de PostgreSQL
-# (los tickets sobreviven a reinicios del contenedor)
+# Volumenes persistentes
 # =============================================================================
 volumes:
   db_data:
     name: ticket-db-data
+  jenkins_data:
+    name: ticket-jenkins-data
