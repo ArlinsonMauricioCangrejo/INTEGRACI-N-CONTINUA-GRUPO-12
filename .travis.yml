@@ -1,0 +1,59 @@
+# =============================================================================
+# .travis.yml - Sistema de Gestion de Tickets de Soporte
+# Enfasis Profesional I (Integracion Continua) - Grupo 12
+# Politecnico Grancolombiano
+# =============================================================================
+# Este archivo define el pipeline de integracion continua ejecutado por
+# Travis CI en su infraestructura alojada en la nube. Se dispara
+# automaticamente ante cada push al repositorio en GitHub.
+#
+# El pipeline valida el backend del proyecto (API REST en Flask) ejecutando
+# la suite de 13 pruebas pytest sobre una base de datos SQLite efimera,
+# de forma independiente al pipeline de Jenkins.
+# =============================================================================
+
+# Lenguaje principal del proyecto
+language: python
+
+# Version de Python (coincide con la usada en el contenedor backend)
+python:
+  - "3.11"
+
+# Servicios necesarios para el build (Docker disponible si se requiere)
+services:
+  - docker
+
+# Variables de entorno para el entorno de pruebas
+env:
+  global:
+    - DATABASE_URL=sqlite:///./test.db
+    - FLASK_ENV=testing
+
+# -----------------------------------------------------------------------------
+# Etapa de instalacion: instala las dependencias del backend
+# -----------------------------------------------------------------------------
+install:
+  - cd backend
+  - pip install --upgrade pip
+  - pip install -r requirements.txt
+
+# -----------------------------------------------------------------------------
+# Etapa de pruebas: ejecuta la suite pytest
+# -----------------------------------------------------------------------------
+script:
+  - pytest -v --tb=short
+
+# -----------------------------------------------------------------------------
+# Notificaciones del resultado del build
+# -----------------------------------------------------------------------------
+notifications:
+  email:
+    on_success: always
+    on_failure: always
+
+# -----------------------------------------------------------------------------
+# Cache para acelerar builds posteriores (reutiliza dependencias pip)
+# -----------------------------------------------------------------------------
+cache:
+  directories:
+    - $HOME/.cache/pip
