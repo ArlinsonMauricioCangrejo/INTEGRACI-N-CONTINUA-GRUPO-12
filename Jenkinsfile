@@ -3,6 +3,20 @@
 // Enfasis Profesional I (Integracion Continua) - Grupo 12
 // Politecnico Grancolombiano
 // =============================================================================
+// Pipeline de Integracion y Despliegue Continuo.
+//
+// A diferencia de la version inicial (que solo construia y verificaba), este
+// pipeline TAMBIEN despliega: tras construir y probar, recrea los contenedores
+// de produccion (frontend y backend) para que los cambios queden visibles de
+// inmediato en http://localhost:8080. Esto evidencia el ciclo CI/CD completo:
+// push -> build -> test -> deploy -> health check.
+//
+// NOTA: el pipeline opera sobre el MISMO proyecto Docker Compose que el stack
+// de produccion ('ticket-system'), de modo que recrea los contenedores reales
+// y no una copia paralela. El servicio 'jenkins' y la base de datos 'db' NUNCA
+// se incluyen en el despliegue, para no reiniciar a Jenkins durante su propia
+// corrida ni recrear la base de datos.
+// =============================================================================
 
 pipeline {
     agent any
@@ -10,7 +24,10 @@ pipeline {
     environment {
         BUILD_TAG = "build-${env.BUILD_NUMBER}"
         DOCKER_BUILDKIT = '1'
-        COMPOSE_PROJECT_NAME = 'ticket-system-pipeline'
+        // Debe coincidir con el nombre de proyecto del stack de produccion en
+        // el host (la carpeta 'ticket-system'). Asi Jenkins recrea los
+        // contenedores reales y no unos en un proyecto aparte.
+        COMPOSE_PROJECT_NAME = 'ticket-system'
     }
 
     options {
@@ -41,7 +58,7 @@ pipeline {
                 sh '''
                     docker run --rm \
                         -e DATABASE_URL=sqlite:///./test.db \
-                        ticket-system-pipeline-backend \
+                        ticket-system-backend \
                         pytest -v --tb=short
                 '''
             }
@@ -49,8 +66,14 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                echo '==> Verificando el stack de produccion en ejecucion'
+                echo '==> Desplegando: reconstruye y recrea frontend y backend en produccion'
                 sh '''
+                    # Recrea SOLO frontend y backend dentro del proyecto ticket-system.
+                    # No se incluye 'jenkins' (se mataria a si mismo) ni 'db'
+                    # (para preservar los datos). El --build garantiza que el
+                    # contenedor quede con la ultima version del codigo.
+                    docker compose -f docker-compose.yml up -d --build frontend backend
+
                     echo "Contenedores activos del proyecto:"
                     docker ps --filter "name=ticket-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                 '''
@@ -59,7 +82,7 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                echo '==> Verificando que el backend responde correctamente'
+                echo '==> Verificando que el backend recien desplegado responde correctamente'
                 sh '''
                     for i in 1 2 3 4 5; do
                         if curl -sf http://ticket-backend:5000/api/health > /dev/null; then
@@ -79,8 +102,8 @@ pipeline {
 
     post {
         success {
-            echo "Pipeline #${env.BUILD_NUMBER} ejecutado exitosamente."
-            echo "Sistema verificado en:"
+            echo "Pipeline #${env.BUILD_NUMBER} ejecutado y desplegado exitosamente."
+            echo "Sistema actualizado y verificado en:"
             echo "   - Frontend:  http://localhost:8080"
             echo "   - Backend:   http://localhost:5000/api/health"
         }
