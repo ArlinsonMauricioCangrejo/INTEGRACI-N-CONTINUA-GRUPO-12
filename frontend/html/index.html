@@ -13,7 +13,7 @@
       color: #1F2937;
     }
     header {
-      background: #1F3864;
+      background: #047857;
       color: #fff;
       padding: 24px 32px;
     }
@@ -32,7 +32,7 @@
       padding: 20px;
       margin-bottom: 20px;
     }
-    .card h2 { margin: 0 0 16px; font-size: 16px; color: #1F3864; }
+    .card h2 { margin: 0 0 16px; font-size: 16px; color: #047857; }
     form { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
     form .full { grid-column: 1 / -1; }
     label { display: block; font-size: 12px; color: #4B5563; margin-bottom: 4px; }
@@ -46,7 +46,7 @@
     }
     textarea { min-height: 60px; resize: vertical; }
     button {
-      background: #1F3864;
+      background: #047857;
       color: #fff;
       border: none;
       padding: 9px 16px;
@@ -55,7 +55,7 @@
       font-size: 14px;
       font-weight: 500;
     }
-    button:hover { background: #2E4E80; }
+    button:hover { background: #065F46; }
     button.secondary { background: #E5E7EB; color: #1F2937; }
     button.secondary:hover { background: #D1D5DB; }
     button.danger { background: #DC2626; }
@@ -80,11 +80,12 @@
     .actions { display: flex; gap: 6px; }
     .empty { padding: 24px; text-align: center; color: #6B7280; font-style: italic; }
     .health-bar { padding: 6px 12px; background: #ECFDF5; color: #065F46; font-size: 11px; border-radius: 4px; margin-bottom: 16px; font-family: 'Consolas', monospace; }
+    .version-badge { display: inline-block; margin-left: 10px; padding: 3px 10px; background: #fff; color: #047857; border-radius: 12px; font-size: 11px; font-weight: 700; vertical-align: middle; letter-spacing: 0.3px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Sistema de Gestión de Tickets de Soporte</h1>
+    <h1>Sistema de Gestión de Tickets de Soporte <span class="version-badge">v2.0 Entrega 3</span></h1>
     <p>Énfasis Profesional I (Integración Continua) — Politécnico Grancolombiano</p>
     <div class="arch">Frontend (Nginx) → Backend (Flask) → PostgreSQL</div>
   </header>
