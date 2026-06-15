@@ -7,7 +7,7 @@ Proyecto del Módulo **Énfasis Profesional I (Integración Continua)** del Poli
 - Carlos Mosquera Urrutia — Backend (API Flask, modelo de datos, pruebas)
 - Vanessa Gómez Ruiz — Frontend (interfaz web, documentación, validación)
 - Juan Peña Márquez — Base de Datos (PostgreSQL, esquema, persistencia)
-- Arlinson Mauricio Cangrejo Díaz — DevOps / CI-CD (Docker, Jenkins, Travis CI, Codeship)
+- Arlinson Mauricio Cangrejo Díaz — DevOps / CI-CD (Docker, Jenkins, Travis CI, CloudBees)
 
 **Docente:** John Olarte
 
@@ -38,7 +38,7 @@ El sistema se compone de **tres contenedores Docker** comunicados entre sí medi
 - **Frontend** (`ticket-frontend`): Nginx Alpine que sirve la interfaz web y enruta las peticiones `/api/*` al contenedor backend mediante proxy reverso.
 - **Backend** (`ticket-backend`): API REST en Python 3.11 con Flask y SQLAlchemy. Se conecta a PostgreSQL por la variable de entorno `DATABASE_URL` resuelta a través del DNS interno de Docker (`db:5432`).
 - **Base de Datos** (`ticket-db`): PostgreSQL 16 con volumen persistente `ticket-db-data` para conservar los tickets entre reinicios.
-- **Jenkins** (`ticket-jenkins`): orquestador del pipeline CI/CD. Construye, prueba y verifica el stack en cada cambio publicado en GitHub.
+- **Jenkins** (`ticket-jenkins`): orquestador del pipeline CI/CD. Construye, prueba y **despliega** el stack en cada cambio publicado en GitHub.
 
 ---
 
@@ -63,7 +63,8 @@ ticket-system/
 │   └── html/
 │       └── index.html           # Interfaz web
 ├── docker-compose.yml           ← Orquesta los 4 contenedores
-├── Jenkinsfile                  ← Pipeline declarativo de CI/CD
+├── Jenkinsfile                  ← Pipeline declarativo de CI/CD (Jenkins)
+├── .travis.yml                  ← Pipeline de Travis CI (Entrega 3)
 ├── .env.example
 ├── .gitignore
 ├── README.md
@@ -78,6 +79,7 @@ ticket-system/
 - [Docker Desktop](https://www.docker.com/products/docker-desktop) (Windows / macOS) o Docker Engine + Compose Plugin (Linux).
 - Git.
 - Para la Entrega 2 (Jenkins): [ngrok](https://ngrok.com) con cuenta gratuita (solo para exponer Jenkins a GitHub durante el desarrollo).
+- Para la Entrega 3 (Travis CI): cuenta en [travis-ci.com](https://app.travis-ci.com) y acceso al plan educativo vía [GitHub Student Developer Pack](https://education.github.com/pack).
 
 No se necesita tener Python, Java ni PostgreSQL instalados en la máquina: todo corre dentro de los contenedores.
 
@@ -384,7 +386,7 @@ A los pocos segundos Jenkins detecta el push y arranca un nuevo build automátic
 | 1 | Checkout      | Descarga la última versión del código desde GitHub.                    |
 | 2 | Build         | Construye las imágenes Docker del backend y frontend.                  |
 | 3 | Test          | Ejecuta la suite de 13 pruebas pytest en una instancia descartable.    |
-| 4 | Deploy        | Verifica que el stack de producción está corriendo.                    |
+| 4 | Deploy        | Reconstruye y recrea los contenedores frontend y backend en producción con `docker compose up -d --build` (CD real — actualizado en la Entrega 3). |
 | 5 | Health Check  | Valida que el API responde correctamente en `/api/health`.             |
 
 Un pipeline completo dura entre 1 y 3 minutos según el cacheo de capas Docker.
@@ -401,9 +403,112 @@ Un pipeline completo dura entre 1 y 3 minutos según el cacheo de capas Docker.
 
 ---
 
+# Entrega 3 — Travis CI y CloudBees (Semanas 7-8)
+
+La Entrega 3 complementa el pipeline de Jenkins (Entrega 2) con dos herramientas adicionales y consolida el flujo CI/CD completo:
+
+- **Travis CI**: servicio de integración continua en la nube (SaaS) que valida cada push de forma independiente a Jenkins, mediante su integración nativa con GitHub.
+- **CloudBees**: capa de extensión empresarial que se instala como *plugins* sobre Jenkins. CloudBees adquirió Codeship (mencionado en la guía del módulo y ya discontinuado como servicio independiente), por lo que se replica su rol mediante estos plugins.
+
+Además, en esta entrega el `Jenkinsfile` evolucionó de solo *verificar* a *desplegar* realmente (CD), y se corrigió el healthcheck del frontend.
+
+## Parte A — Travis CI
+
+### Pre-requisitos
+
+- Cuenta de GitHub con el repositorio del proyecto.
+- El archivo `.travis.yml` en la raíz del repositorio (ya incluido).
+
+### Paso 1 — Registro y autorización
+
+1. Ingresar a <https://app.travis-ci.com> e iniciar sesión con **Sign in with GitHub**.
+2. Autorizar el acceso a la cuenta y a los repositorios mediante GitHub Apps.
+
+### Paso 2 — Vincular el repositorio
+
+Activar el repositorio `INTEGRACI-N-CONTINUA-GRUPO-12` desde el dashboard de Travis para que detecte los push.
+
+### Paso 3 — El archivo `.travis.yml`
+
+Travis lee este archivo de la raíz del repositorio para saber cómo construir y probar. A diferencia del `Jenkinsfile` (Groovy), está escrito en YAML declarativo:
+
+```yaml
+language: python
+python:
+  - "3.11"
+services:
+  - docker
+env:
+  - DATABASE_URL=sqlite:///./test.db FLASK_ENV=testing
+install:
+  - cd backend && pip install -r requirements.txt
+script:
+  - cd backend && pytest -v --tb=short
+```
+
+Travis ejecuta las 13 pruebas pytest sobre una base SQLite efímera, de forma totalmente independiente a Jenkins (verificación cruzada del mismo cambio).
+
+### Paso 4 — Activar el plan educativo (GitHub Student Developer Pack)
+
+Travis CI eliminó su plan gratuito para nuevos usuarios y exige un plan de pago. Para habilitar los builds sin costo:
+
+1. Obtener el **GitHub Student Developer Pack** en <https://education.github.com/pack> con el correo institucional.
+2. Activar **2FA** y completar el perfil de GitHub (requisitos de la verificación académica).
+3. Solicitar a soporte de Travis (<support@travis-ci.com>) el plan educativo, indicando el handle de GitHub.
+
+### Paso 5 — Disparar el build
+
+Cada `git push` a `main` dispara automáticamente un build en Travis gracias a la integración nativa con GitHub. El estado se ve en el dashboard de Travis y en los *badges* del repositorio (`build passing`).
+
+## Parte B — CloudBees (plugins sobre Jenkins)
+
+Codeship dejó de operar como servicio independiente tras su adquisición por CloudBees. Se replica su rol instalando los plugins de CloudBees sobre la instancia de Jenkins:
+
+1. **Administrar Jenkins → Plugins → Available plugins**.
+2. Buscar e instalar **CloudBees CD** y **CloudBees Installation Manager** (versiones usadas: CloudBees CD `1.1.42` y CloudBees Installation `1.43`).
+3. Marcar **Restart Jenkins when installation is complete**, o reiniciar el contenedor:
+   ```bash
+   docker restart ticket-jenkins
+   ```
+4. Verificar en **Administrar Jenkins → Plugins → Installed plugins** que aparezcan los plugins de CloudBees.
+
+## Parte C — El Jenkinsfile ahora despliega (CD real)
+
+En la Entrega 2 el stage **Deploy** solo verificaba que el stack estuviera corriendo. En la Entrega 3 se actualizó para **desplegar de verdad**:
+
+- Se alineó `COMPOSE_PROJECT_NAME = 'ticket-system'` para que Jenkins opere sobre los mismos contenedores de producción y no sobre un proyecto paralelo.
+- El stage **Deploy** ahora ejecuta `docker compose up -d --build frontend backend`, recreando los contenedores de aplicación con la última versión del código. La base de datos (`ticket-db`) se deja intacta a propósito, para preservar los tickets (persistencia).
+
+También se corrigió el **healthcheck del frontend**: consultaba `http://localhost/frontend-health`, que dentro del contenedor se resolvía a IPv6 (`::1`) donde Nginx no escucha, marcándolo `unhealthy`. Se cambió a `http://127.0.0.1/frontend-health` (IPv4) y quedó `healthy`.
+
+## Parte D — Laboratorio end-to-end (azul → verde)
+
+Demostración del flujo completo: un cambio visible en el frontend que se despliega solo tras un push, validado en paralelo por Jenkins y Travis CI.
+
+1. Levantar el stack y verificar los 4 contenedores saludables:
+   ```bash
+   docker compose up -d
+   docker ps --filter "name=ticket-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+   ```
+2. Abrir <http://localhost:8080> (interfaz **azul**, v1.0) y crear un ticket de ejemplo.
+3. Modificar `frontend/html/index.html`: cambiar el color de marca a verde (`#047857`) y agregar el badge de versión `v2.0 Entrega 3`.
+4. Publicar el cambio:
+   ```bash
+   git add .
+   git commit -m "E3: frontend v2.0 verde - demostracion de despliegue continuo"
+   git push origin main
+   ```
+5. El push dispara **en paralelo** dos pipelines: Jenkins (vía webhook a través de ngrok) y Travis CI (integración nativa con GitHub).
+6. Jenkins ejecuta sus 5 stages (Checkout → Build → Test → Deploy → Health Check) y recrea el contenedor frontend con la versión verde.
+7. Travis ejecuta `pytest` de forma independiente y marca el build como `passed`.
+8. Ambos pipelines terminan en verde.
+9. Refrescar <http://localhost:8080> con **Ctrl+F5** (refresco forzado): la interfaz ahora está **verde** con el badge `v2.0 Entrega 3`, y los tickets creados antes del push siguen disponibles (persistencia en PostgreSQL tras el redespliegue).
+
+---
+
 ## Hoja de ruta del módulo
 
 - **Semanas 1-2 (Foro):** estructura base del proyecto, repositorio en GitHub, MVP del backend. ✅
 - **Semana 3 (Entrega 1):** arquitectura completa de tres contenedores Docker comunicados. ✅
-- **Semana 5 (Entrega 2):** **Jenkins como orquestador del pipeline de CI con webhook real desde GitHub vía ngrok — estado actual.** ✅
-- **Semanas 7-8 (Entrega 3 y sustentación):** Travis CI y Codeship + documentación final.
+- **Semana 5 (Entrega 2):** Jenkins como orquestador del pipeline de CI con webhook real desde GitHub vía ngrok. ✅
+- **Semanas 7-8 (Entrega 3):** Travis CI (CI en la nube) + CloudBees (plugins sobre Jenkins, sucesor de Codeship), `Jenkinsfile` con despliegue real (CD), laboratorio end-to-end y documentación final. ✅
