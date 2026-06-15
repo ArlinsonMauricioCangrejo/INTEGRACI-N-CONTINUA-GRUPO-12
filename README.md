@@ -4,10 +4,10 @@ Proyecto del Módulo **Énfasis Profesional I (Integración Continua)** del Poli
 
 ## Integrantes
 
-- Carlos Mosquera Urrutia — Backend (API Flask, modelo de datos, pruebas)
-- Vanessa Gómez Ruiz — Frontend (interfaz web, documentación, validación)
-- Juan Peña Márquez — Base de Datos (PostgreSQL, esquema, persistencia)
-- Arlinson Mauricio Cangrejo Díaz — DevOps / CI-CD (Docker, Jenkins, Travis CI, CloudBees)
+- Arlinson Mauricio Cangrejo Díaz — DevOps / CI-CD, Infraestructura y Frontend (Docker, Jenkins, Travis CI, CloudBees, Nginx, documentación)
+- Carlos Mosquera Urrutia — Backend y Base de Datos (API Flask, modelo de datos, SQLAlchemy, PostgreSQL, pruebas pytest)
+
+> Nota: el grupo se conformó originalmente con cuatro integrantes; el proyecto fue culminado por los dos integrantes listados, quienes asumieron de forma conjunta todas las áreas técnicas.
 
 **Docente:** John Olarte
 
